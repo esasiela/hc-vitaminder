@@ -1,0 +1,11 @@
+# python
+.idea
+__pycache__
+venv
+
+# java
+target/
+.settings
+.classpath
+.project
+
