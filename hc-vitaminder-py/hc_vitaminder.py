@@ -18,21 +18,19 @@ import configparser
 #       1 - led brightness
 #       2-4 - vita LED r, g, b
 #       5-7 - sys  LED r, g, b
-# id=02: STATE
+# id=02: set LED
 #   req bytes:
 #       0 - message ID 0x02
 #       1 - brightness
-#       2 - vita-red
-#       3 - vita-green
-#       4 - vita-blue
-#       5 - off millis duration (div by 10) (off=0 means constant on)
-#       6 - on millis duration (div by 10)
-#       7 - unused
+#       2 - pixel mask (least significant nibble represents the 4 pixels)
+#       3 - red
+#       4 - green
+#       5 - blue
+#       6 - off millis duration (div by 10) (off=0 means constant on)
+#       7 - on millis duration (div by 10)
 #   rsp bytes:
 #       0 - 0x03
-#       1 - led brightness
-#       2-4 - vita LED r, g, b
-#       5-7 - sys  LED r, g, b
+#       1-7 - ignored
 
 # client message definitions (sent out by Arduino, received by python):
 # id=04: device boot
@@ -92,7 +90,7 @@ class Vitaminder:
     def __del__(self):
         self.disconnect()
 
-    def send_state_message(self):
+    def send_set_led_message(self):
         # we basically need a brightness (just use default) and a color (base on state)
         color_map = {
             VitState.UNMEDICATED:   rgb_from_config(self.config["color_unmedicated"]),
@@ -112,13 +110,25 @@ class Vitaminder:
         rgb = color_map.get(self.state, [128, 0, 255])
         brightness = brightness_map.get(self.state, 128)
 
+        # rgb = [0, 0, 255]
         # TODO implement blinking for reminder states
 
         blink_off = 25
         blink_on = 75
 
-        # the sys rgb (last 3 bytes) are ignored by the device
-        self.serial_port.write(bytes([2, brightness, rgb[0], rgb[1], rgb[2], blink_off, blink_on, 0]))
+        pixel_mask = 0x0F
+
+        #   req bytes:
+        #       0 - message ID 0x02
+        #       1 - brightness
+        #       2 - pixel mask (least significant nibble represents the 4 pixels)
+        #       3 - red
+        #       4 - green
+        #       5 - blue
+        #       6 - off millis duration (div by 10) (off=0 means constant on)
+        #       7 - on millis duration (div by 10)
+
+        self.serial_port.write(bytes([0x02, brightness, pixel_mask, rgb[0], rgb[1], rgb[2], blink_off, blink_on]))
 
     def time_update_thread(self, debug=False):
         while self.alive:
@@ -302,10 +312,10 @@ class Vitaminder:
                     if e.event_id == VitMsg.HEARTBEAT:
                         self.serial_port.write(bytes([0, 1, 1, 1, 1, 1, 1, 1]))
                     elif e.event_id == VitMsg.STATE:
-                        self.send_state_message()
+                        self.send_set_led_message()
                     elif e.event_id == VitMsg.SERIAL_BOOT:
                         # device booted, send them current state info
-                        self.send_state_message()
+                        self.send_set_led_message()
                     elif e.event_id == VitMsg.SERIAL_BUTTON:
                         # they pressed a button, DO SOMETHING!
                         self.handle_button_press(e)

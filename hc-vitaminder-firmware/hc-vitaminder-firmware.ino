@@ -34,13 +34,13 @@ const int MSG_SIZE = 8;
 
 const byte MSG_REQ_HEARTBEAT = 0x00;
 const byte MSG_RSP_HEARTBEAT = 0x01;
-const byte MSG_REQ_STATE = 0x02;
-const byte MSG_RSP_STATE = 0x03;
+const byte MSG_REQ_SET_LED = 0x02;
+const byte MSG_RSP_SET_LED = 0x03;
 const byte MSG_BOOT = 0x04;
 const byte MSG_BUTTON = 0x06;
 
 const int PIXEL_PIN = 8;
-const int PIXEL_COUNT = 2;
+const int PIXEL_COUNT = 4;
 const int DEFAULT_BRIGHTNESS = 128;
 CRGB pixels[PIXEL_COUNT];
 
@@ -79,16 +79,16 @@ void setup() {
   for (int i = 0; i < 6; i++) {
 
     pixels[VIT_PIX] = CRGB::Black;
-    pixels[SYS_PIX] = CRGB::Yellow;
+    pixels[SYS_PIX] = CRGB::Pink;
     FastLED.show();
     delay(250);
-    pixels[VIT_PIX] = CRGB::Yellow;
+    pixels[VIT_PIX] = CRGB::Pink;
     pixels[SYS_PIX] = CRGB::Black;
     FastLED.show();
     delay(250);
   }
-  pixels[VIT_PIX] = CRGB::Yellow;
-  pixels[SYS_PIX] = CRGB::Yellow;
+  pixels[VIT_PIX] = CRGB::Black;
+  pixels[SYS_PIX] = CRGB::Black;
   FastLED.show();
 
   // send a BOOT message so the host will send us current state info
@@ -107,6 +107,8 @@ void loop() {
 
   if ((millis() - solitude_millis) > SOLITUDE_ERROR_DURATION  && !solitude_error_state) {
     solitude_error_state = true;
+
+    clearPixels();
 
     pixels[SYS_PIX] = CRGB::Red;
     FastLED.show();
@@ -128,8 +130,9 @@ void loop() {
   if (haveButtonPress) {
     // either button triggers the same message, which contains state for both buttons
     rsp[0] = MSG_BUTTON;
-    rsp[1] = okButton.getState() ? 0x01 : 0x00;
-    rsp[2] = snButton.getState() ? 0x01 : 0x00;
+    // remember - pull up resistor means getState()==1 when not pressed, and 0 when pressed
+    rsp[1] = okButton.getState() ? 0x00 : 0x01;
+    rsp[2] = snButton.getState() ? 0x00 : 0x01;
     for (int x = 3; x < MSG_SIZE; x++) {
       // these are ignored
       rsp[x] = MSG_BUTTON;
@@ -159,32 +162,37 @@ void loop() {
 
         bt.write(rsp, MSG_SIZE);
 
-      } else if (req[0] == MSG_REQ_STATE) {
+      } else if (req[0] == MSG_REQ_SET_LED) {
         Serial.println("msg 1 - LED update");
 
         haveContact();
-        
+
+        // byte 1 - brightness
         FastLED.setBrightness(req[1]);
 
-        // the hardware is wired Vita LED on index=1, and Sys LED on index=0
-        pixels[VIT_PIX] = CRGB(req[2], req[3], req[4]);
-
-        // bytes 5-6 have the blink_off and blink_on durations (div by 10)
-        /*
-        if (req[5] == 0) {
-          blinking = false;
-          blink_off_millis = req[5] * 10;
-          blink_on_millis = req[6] * 10;
-          on_color = pixels[VIT_PIX];
-        }
-        */
+        // byte 2 - pixel mask
+        Serial.print("\tpixel mask ");
+        Serial.println(req[2], BIN);
         
-        // not doing the system update, that really should be managed locally by the device
-        //pixels[SYS_PIX] = CRGB(req[5], req[6], req[7]);
+        for (int pixelIdx=0; pixelIdx<PIXEL_COUNT; pixelIdx++) {
+          if (req[2] & (0x01 << pixelIdx)) {
+            Serial.print("\tmessage applies to pixel ");
+            Serial.println(pixelIdx);
+            pixels[pixelIdx] = CRGB(req[3], req[4], req[5]);
+          }
+        }
+
+        // bytes 3-5 - rgb
+
+        // bytes 6,7 have blink_off and blink_on durations (div by 10)
+        // TODO implement blinking
+
+        // the hardware is wired Vita LED on index=1, and Sys LED on index=0
+        // pixels[VIT_PIX] = CRGB(req[2], req[3], req[4]);
 
         FastLED.show();
 
-        rsp[0] = MSG_RSP_STATE;
+        rsp[0] = MSG_RSP_SET_LED;
         rsp[1] = FastLED.getBrightness();
         rsp[2] = pixels[VIT_PIX].r;
         rsp[3] = pixels[VIT_PIX].g;
@@ -222,9 +230,21 @@ void loop() {
   }
 }
 
-void haveContact() {
-  pixels[SYS_PIX] = CRGB::Green;
+void clearPixels() {
+  for (int i=0; i<PIXEL_COUNT; i++) {
+    pixels[i] = CRGB::Black;
+  }
   FastLED.show();
+}
+
+void haveContact() {
+  // erase any error condition we were previously reporting
+  if (solitude_error_state) {
+    clearPixels();
+  }
+  
+  //pixels[SYS_PIX] = CRGB::Green;
+  //FastLED.show();
   
   solitude_millis = millis();
   solitude_error_state = false;

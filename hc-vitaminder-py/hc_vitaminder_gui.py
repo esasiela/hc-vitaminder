@@ -9,9 +9,9 @@ from hc_vitaminder import *
 
 
 class SerialConnectionWidget(QFrame):
-    def __init__(self, parent=None, vitaminder=None):
+    def __init__(self, parent=None, serial_port=None):
         QFrame.__init__(self, parent)
-        self.vitaminder = vitaminder
+        self.serial_port = serial_port
         self.port_combobox = None
         self.connect_button = None
         self.initUI()
@@ -56,10 +56,13 @@ class SerialConnectionWidget(QFrame):
     def click_connect(self):
         print("clicked connect", self.port_combobox.currentText())
 
-        if self.vitaminder is not None and not self.vitaminder.isConnected():
-            self.vitaminder.port_name = self.port_combobox.currentText().split(" ")[0]
-            self.vitaminder.connect()
-            # TODO check success of connection
+        if self.serial_port is None or not self.serial_port.isOpen():
+            port_name = self.port_combobox.currentText().split(" ")[0]
+
+            print("connecting:", port_name)
+            # self.serial_port = serial.Serial(port_name, timeout=int(self.config["comm_read_timeout"]))
+            self.serial_port = serial.Serial(port_name, timeout=1)
+            print("connection status:", self.serial_port.isOpen())
 
 
 class LEDColorWidget(QFrame):
@@ -118,9 +121,8 @@ class LEDColorWidget(QFrame):
             self.icon.setStyleSheet("background-color: " + c.name())
 
 
-class VitaminderGui(Vitaminder):
+class VitaminderGui():
     def __init__(self):
-        Vitaminder.__init__(self)
         self.main_window = None
         self.led_vit_widget = None
         self.led_sys_widget = None
@@ -157,7 +159,8 @@ class VitaminderGui(Vitaminder):
 
     def create_gui(self):
 
-        port_frame = SerialConnectionWidget(vitaminder=self)
+        # port_frame = SerialConnectionWidget(vitaminder=self)
+        port_frame = SerialConnectionWidget()
 
         self.led_vit_widget = LEDColorWidget(title="Vitaminder LED", color=QColor("#FF0000"))
         self.led_sys_widget = LEDColorWidget(title="System LED")
