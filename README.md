@@ -12,4 +12,5 @@ Instead I'll build a little project that includes:
 
 * Future compatibility for web page access, android app, or whatever other fun comes up.
 
+The full website with all the fun images and stories is over at [Hedge Court](https://www.hedgecourt.com/robots/vitaminder/)
 
